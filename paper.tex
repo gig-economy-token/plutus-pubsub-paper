@@ -1,4 +1,78 @@
 \documentclass{article}
 \begin{document}
+\title{A pub-sub mechanism for Cardano and Plutus}
+\author{Javier Casas Velasco}
+\date{March 2019}
+\maketitle
+
+\begin{abstract}
+  On this paper we demonstrate how we can use DataScripts to communicate different programs using the Cardano Blockchain and the Plutus Smart Contract programming language. We construct a mechanism that works in a way akin to a pub-sub communication system.
+\end{abstract}
+
+\tableofcontents
+
+\section{Introduction}
+Blockchains provide a new way to intercommunicate different actors in the world. The blockchains provide a solution for the old problem of getting to cooperate different actors that may not want to cooperate. In this sense, the main use of the Blockchain has been so far as a ledger that is mostly handled manually. When two actors want to communicate, they use mostly manual approaches (such as chats, videoconferences, or plain old phone calls) before actually using the Blockchain, in most cases as a ledger for paying.
+
+In order to be able to automate some of this manual communication, an automatic way of communicating these actors shall be developed, so that the actors can communicate without resorting to manual ways.
+
+\subsection{The Publisher-Subscriber (pub-sub) pattern}
+
+One of the main building blocks of distributed process communication is the Publisher-Subscriber (also known as pub-sub) pattern. It allows one or many broadcaster processes to send messages to one or many receiver processes. Many other patterns of distributed systems can be constructed from it.
+For example, client-server communication between two processes can be achieved by having two pub-sub patterns, one for the client to send the queries to the server, the other for the server to send the responses back to the client.
+
+The main roles in the pub-sub pattern are:
+\paragraph{Publisher}
+The publisher sends data messages to the channel. There may be many publishers broadcasting messages at the same time.
+
+\paragraph{Subscriber}
+The subscriber receives messages from the channel, and acts on them. There may be many subscribers receiving messages from the channel, and each subscriber receives all the messages.
+
+\paragraph{Channel}
+A channel is an abstraction that allows publishers to send messages to all the subscribers.
+
+\paragraph{Message}
+A message is an arbitrary piece of data that can be encoded and sent in a channel to be received and decoded by the subscribers listening on the channel.
+
+\paragraph{Broadcasting}
+The pub-sub pattern uses broadcasting as the single way of communication. A copy of each message sent to the channel is delivered to each subscriber.
+
+The main difference between pub-sub and other many-to-many communication patterns is that pub-sub delivers all the messages to all the subscribers, whereas other patterns may decide to route the messages to a restricted group of receivers based on an arbitrary policy.
+
+
+\subsection{The Cardano blockchain}
+
+\subsection{Plutus Smart Contracts in the Cardano blockchain}
+
+
+\section{Publishing and receiving messages}
+
+\subsection{Publishing DataScripts to the blockchain}
+
+\subsection{Receiving DataScripts from the blockchain}
+
+\section{Converting arbitrary data from and to DataScripts}
+
+\subsection{Converting arbitrary data into DataScripts}
+
+\subsection{Recovering arbitrary data from DataScripts}
+
+\section{Conclusions}
+
     Hello, world!
+
+    Instead of WYSIWYG editors, typesetting systems like \TeX{} or \LaTeX{} \cite{lamport94} can be used.
+
+
+\begin{thebibliography}{9}
+
+\bibitem{lamport94}
+  Leslie Lamport,
+    \textit{\LaTeX: a document preparation system},
+    Addison Wesley, Massachusetts,
+    2nd edition,
+    1994.
+
+\end{thebibliography}
+
 \end{document}
