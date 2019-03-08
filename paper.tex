@@ -39,23 +39,87 @@ The pub-sub pattern uses broadcasting as the single way of communication. A copy
 
 The main difference between pub-sub and other many-to-many communication patterns is that pub-sub delivers all the messages to all the subscribers, whereas other patterns may decide to route the messages to a restricted group of receivers based on an arbitrary policy.
 
-
 \subsection{The Cardano blockchain}
+Cardano is a blockchain based on the Outboros Proof of Stake {QUOTE HERE}. It provides a model for universal transactions called UTxO. The Outboros Proof of Stake protocol provides protection against many of the usual attacks against blockchains, while being a Proof of Stake protocol, and thus requiring very little computational power in comparison with Proof of Work blockchains. On top of the usual cryptocurrency operations, Cardano seeks to provide other services, including Smart Contracts.
 
 \subsection{Plutus Smart Contracts in the Cardano blockchain}
+A Smart Contract is a transaction in a blockchain governed by an arbitrary program. This is different from the usual transactions, that are usually governed solely by one or several cryptographic signature.
 
+The Smart Contracts for the Cardano blockchain will be written in a language called Plutus, and based on Haskell. At the time of writing this paper, Plutus is in heavy evolution, and lacks yet a testing network. The only way to execute Plutus smart contracts is through the Plutus Emulator, or through the Plutus Playground, which uses the emulator under the hood.
+
+The way Plutus Smart Contracts are implemented is quite simple, but requires some understanding:
+
+\begin{itemize}
+\item A stakeholder pays an amount to the address of a smart contract (which is the hash of the smart contract). In this payment, the stakeholder provides a DataScript: a piece of data in the Plutus format that can be used to configure the smart contract.
+\item A second stakeholder wants to spend the amount the first stakeholder paid to the smart contract address. To do so, he has to provide a smart contract which hash coincides with the first address, and a second piece of data called the RedeemerScript, and, when executing the smart contract code with the DataScript, the RedeemerScript and the transaction as parameters, it has to terminate without any errors. Then the transaction is authorised.
+\end{itemize}
+
+This implementation provides several interesting approaches that we are going to use to construct our pub-sub mechanism.
 
 \section{Publishing and receiving messages}
 
-\subsection{Publishing DataScripts to the blockchain}
+In order to create a pub-sub mechanism, we need a way to write messages to the Cardano blockchain, and a mechanism to recover messages from the blockchain. The blockchain is public, and we will use this property to derive the broadcasting property of pub-sub from it.
 
-\subsection{Receiving DataScripts from the blockchain}
+\subsection{Publishing messages to the blockchain}
+First, we need to publish messages to the blockchain. For this, we will use smart contracts, but not in a complete way. We will encode our messages in DataScripts, and will publish them to the blockchain by paying to the address of a Smart Contract with the DataScript as attached data.
+
+For this, we can use the standard mechanisms that Plutus provides:
+
+\begin{description}
+\item [Ledger.Types.lifted] converts a bunch of data to Plutus format.
+\item [Wallet.API.payToScript] pays an amount of Ada to the address of a Smart contract with the DataScript provided.
+\end{description}
+
+A usual implementation of this can be:
+
+\begin{verbatim}
+CODE GOES HERE
+\end{verbatim}
+
+\subsection{Receiving messages from the blockchain}
+Receiving messages is also supported by the blockchain, but not in the way the Cardano team envisioned.
+
+The Wallet API supports a wallet listening for activity in arbitrary addresses. This is intended for the wallet to be notified when it receives a transaction, or when activity occurs at a smart contract of interest. This mechanism is based on two Wallet API endpoints:
+
+\begin{description}
+\item [Wallet.API.startWatching] starts watching the specified address, and adds any transactions that happen on it to the dictionary of watched addresses.
+\item [Wallet.API.watchedAddresses] returns the dictionary of watched addresses, that includes all the associated transactions for all the watched addresses, including DataScripts for associated payToScript transactions.
+\end{description}
+
+This means we can recover data from the blockchain, but in the format of Plutus smart contracts. The messages will be accumulated on the AddressMap in arbitrary order, and this is something we have to keep in mind when constructing our systems.
 
 \section{Converting arbitrary data from and to DataScripts}
+The blockchain will accept and return data in the Plutus format, but we want to process it as Haskell data, so our standard Haskell applications can just use it.
 
 \subsection{Converting arbitrary data into DataScripts}
+Converting arbitrary data to a DataScript is well supported in the system. As stated previously,
+
+\begin{description}
+\item [Ledger.Types.lifted] converts a bunch of data to Plutus format.
+\end{description}
+
+The only requirement is that the data has a Language.PlutusTx.Lift.Class.Lift instance, which can be manufactured automatically by using the Language.PlutusTx.makeLift Template Haskell incantation.
+
+\begin{verbatim}
+module MyModule where
+
+import qualified Language.PlutusTx            as PlutusTx
+import           Ledger                       (Slot(..), PubKey)
+import           Ledger.Ada.TH                (Ada)
+
+-- Declare our datatype
+data MyDatatype = MyDatatype
+    { foo :: Slot
+    , bar :: Int
+    , baz :: Ada
+    }
+
+-- Create a Language.PlutusTx.Lift.Class.Lift instance for it
+PlutusTx.makeLift ''MyDatatype
+\end{verbatim}
 
 \subsection{Recovering arbitrary data from DataScripts}
+Lifting data to the Plutus format is as easy as using the Ledger.Types.lifted function. But the way back is not that easy.
 
 \section{Conclusions}
 
