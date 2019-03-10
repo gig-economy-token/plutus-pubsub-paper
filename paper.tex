@@ -119,14 +119,205 @@ PlutusTx.makeLift ''MyDatatype
 \end{verbatim}
 
 \subsection{Recovering arbitrary data from DataScripts}
-Lifting data to the Plutus format is as easy as using the Ledger.Types.lifted function. But the way back is not that easy.
+Lifting data to the Plutus format is as easy as using the Ledger.Types.lifted function. But the way back is not that easy. To be able to achieve this, we have to figure out the Plutus format, and a way to interpret Haskell datatypes out of it.
+
+So let's start with an in-depth overview of Plutus.
+
+\subsubsection{Core Plutus types}
+From the Plutus core types, at https://github.com/input-output-hk/plutus/blob/master/language-plutus-core/src/Language/PlutusCore/Type.hs\#L235, let's get to understand the four builtin types:
+\begin{verbatim}
+-- | A constant value.
+data Constant a = BuiltinInt a Natural Integer
+                | BuiltinBS a Natural BSL.ByteString
+                | BuiltinSize a Natural
+                | BuiltinStr a String
+        deriving (Functor, Show, Eq, Generic, NFData, Lift)
+\end{verbatim}
+
+There are four builtin types: Integer, ByteString, Natural and String.
+
+\pagebreak
+
+Just after the previous code, at https://github.com/input-output-hk/plutus/blob/master/language-plutus-core/src/Language/PlutusCore/Type.hs\#L244, we can see the different terms that can be part of a term:
+\begin{verbatim}
+data Term tyname name a = Var a (name a) -- ^ A named variable
+                        | TyAbs a (tyname a) (Kind a) (Term tyname name a)
+                        | LamAbs a (name a) (Type tyname a) (Term tyname name a)
+                        | Apply a (Term tyname name a) (Term tyname name a)
+                        | Constant a (Constant a) -- ^ A constant term
+                        | Builtin a (Builtin a)
+                        | TyInst a (Term tyname name a) (Type tyname a)
+                        | Unwrap a (Term tyname name a)
+                        | IWrap a (Type tyname a) (Type tyname a) (Term tyname name a)
+                        | Error a (Type tyname a)
+deriving (Functor, Show, Generic, NFData, Lift)
+\end{verbatim}
+
+Following from these two pieces of code, we can get the final form of a builtin value in Plutus:
+\begin{itemize}
+\item \verb|Constant _ (BuiltinInt _ _ i)|
+\item \verb|Constant _ (BuiltinBS _ _ bs)|
+\item \verb|Constant _ (BuiltinSize _ sz)|
+\item \verb|Constant _ (BuiltinStr _ str)|
+\end{itemize}
+
+For example, the Plutus program \verb#$$(Ledger.compileScript [|| 3 ||])#
+will be converted to \verb#Constant _ (BuiltinInt _ _ 3)#.
+
+
+\subsubsection{Core Plutus language}
+Plutus is based on Lambda Calculus. It looks and behaves in a way similar to Haskell, except it's strict. We will use this to extract the data that interests us.
+
+\subsubsection{Evaluating Plutus programs}
+We know how the programs will look like after they have been fully evaluated, but we haven't defined how evaluation will happen. As expected, Plutus provides a way to evaluate programs that is intended mainly to be used on the emulator to see if a program errors out or not, but we will use this mechanism in a different way.
+
+The main function is located in Language.PlutusTx.Evaluation.evaluateCekTrace
+
+\begin{verbatim}
+evaluateCekTrace
+    :: Program TyName Name ()
+    -> ([String], EvaluationResultDef)
+\end{verbatim}
+
+When running a Plutus program through this evaluator function, it will generate a result and a bunch of error messages. We are interested in the EvaluationResultDef:
+
+\begin{verbatim}
+type EvaluationResultDef = EvaluationResult (Value TyName Name ())
+data EvaluationResult a
+    = EvaluationSuccess a
+    | EvaluationFailure
+    deriving (Show, Eq, Functor, Foldable, Traversable)
+\end{verbatim}
+
+Now it is obvious how we can distinguish a success from a failure, but what is that (Value TyName Name ()) ? A bit of looking around finally completes almost the whole piece of the puzzle:
+
+\begin{verbatim}
+newtype Script = Script { getPlc :: PLC.Program PLC.TyName PLC.Name () }
+newtype ValidatorScript = ValidatorScript { getValidator :: Script }
+newtype DataScript = DataScript { getDataScript :: Script }
+newtype RedeemerScript = RedeemerScript { getRedeemer :: Script }
+\end{verbatim}
+
+The Validators, the Data Scripts, and the Redeemer Scripts are nothing more than Scripts, which are nothing more than Program TyName Name (), that when evaluated, produce an EvaluationResult that may contain a Value TyName Name (). Finally, we pattern match on the Value TyName Name (), and extract the corresponding constructor of Constant.
+
+\subsubsection{Extracting fields from complex datatypes}
+The previous schema allows us to extract Plutus core datatypes, as long as they are standalone. But, what if the value is part of a composite datatype? After all, we all happily use ADTs in Plutus, and would be a bad surprise if we can't extract values from them.
+
+The answer lies again in Lambda Calculus in the Haskell style. Let's have a small example:
+\begin{verbatim}
+data Foo = Foo
+          { fooBar :: Int
+          , fooBaz :: ByteString
+          }
+          | Bar
+          { barBar :: Int
+          }
+PlutusTx.makeLift ''Future
+\end{verbatim}
+If we could extract any of the fields, we could use our evaluation mechanism to figure out what is the actual value by pattern matching on the result. In Haskell we would happily do it by using the accessor functions fooBar, fooBaz and barBar. These functions will not work in Plutus, and, helpfully, Plutus suggests us to use pattern matching. Let's construct a few Plutus functions to extract the values:
+\begin{verbatim}
+fooBarAccessor = $$(Ledger.compileScript [|| \(Foo fooBar _) -> fooBar ||]) 
+fooBazAccessor = $$(Ledger.compileScript [|| \(Foo _ fooBaz) -> fooBaz ||]) 
+barBarAccessor = $$(Ledger.compileScript [|| \(Bar barBar) -> barBar ||])
+\end{verbatim}
+
+Now, by using plain old Lambda calculus, we should just be able to apply an accessor to a value of Foo and get either one of the fields out, or an error. To do this, we need another function provided by Plutus:
+
+\begin{verbatim}
+applyScript :: Script -> Script -> Script
+\end{verbatim}
+
+Essentially, applyScript takes an f and an a, and returns f a. Which then we run through evaluateCekTrace to get a value or an error out. And now we are almost ready to complete the way back to Haskell from Plutus. We start with a bunch of functions for extracting the core values:
+
+\begin{verbatim}
+getInt :: (a, EvaluationResult (Term b c d)) -> Maybe Integer
+getInt (_, EvaluationSuccess (Constant _ (BuiltinInt _ _ x))) = Just x
+getInt _ = Nothing
+\end{verbatim}
+
+These functions can't just return the datatype, instead they have to offer it as a Maybe. After all, nothing stops us from trying to extract values from datatypes that don't have such values, and the only way to allow that to work properly is by offering some kind of signalling for failure, for example, Maybe.
+
+And we continue with functions for extracting specific fields in our Foo datastructure:
+\begin{verbatim}
+getFooBar ::
+  DataScript ->
+  Maybe Int
+getFooBar datascript =
+    getInt $ evaluateCekTrace (unsafeCoerce (accessor `applyScript` datascript)
+  where
+    accessor = fooBarAccessor
+
+getFooBaz :: DataScript -> Maybe ByteString
+getFooBaz = ...
+
+getBarBar :: DataScript -> Maybe Int
+getBarBar = ...
+\end{verbatim}
+
+Finally, we take all the getters and make use of old Applicative/Alternative machinery to construct our Foo back:
+
+\begin{verbatim}
+getFoo ::
+  DataScript ->
+  Maybe Foo
+getFoo datascript =
+    (Foo <$> getFooBar datascript <*> getFooBaz datascript)
+    <|>
+    (Bar <$> getBarBar datascript)
+\end{verbatim}
+
+\section{The plutus-unlift library}
+All the code to extract a value from a DataScript is quite mechanical, and can be streamlined. For this, we have constructed a small library, called plutus-unlift, that is intended to simplify this process.
+
+With the intention of supporting extracting arbitrarily nested datastructures, we define a typeclass, called Unlift, to simplify the process:
+
+\begin{verbatim}
+class Unlift a where
+  unlift :: DataScript -> Maybe a
+\end{verbatim}
+
+And we support this typeclass with some instances for basic cases:
+
+\begin{verbatim}
+instance Unlift ByteString where
+  unlift (DataScript ds) = getBS $ evaluateCekTrace (unsafeCoerce ds)
+  
+instance Unlift Integer where
+  unlift (DataScript ds) = getInt $ evaluateCekTrace (unsafeCoerce ds)
+
+instance Unlift Int where
+  unlift (DataScript ds) = fromIntegral <$> (getInt $ evaluateCekTrace (unsafeCoerce ds))
+\end{verbatim}
+
+Newtype instances are not hard to construct:
+
+\begin{verbatim}
+instance Unlift PubKey where
+  unlift (DataScript ds) = PubKey <$> unlift (DataScript (extractor `applyScript` ds))
+    where
+      extractor = $$(Ledger.compileScript [|| \(PubKey x) -> x ||])
+\end{verbatim}
+
+\pagebreak
+
+And, finally, instances for arbitrary datatypes are also not hard to construct:
+
+\begin{verbatim}
+instance Unlift Foo where
+  unlift (DataScript ds) =
+    (
+      Foo
+      <$> unlift (DataScript ($$(Ledger.compileScript [|| \(Foo a _) -> a ||]) `applyScript` ds))
+      <*> unlift (DataScript ($$(Ledger.compileScript [|| \(Foo _ b) -> b ||]) `applyScript` ds))
+    ) <|> (
+      Bar
+      <$> unlift (DataScript ($$(Ledger.compileScript [|| \(Bar a) -> a ||]) `applyScript` ds))
+    )
+\end{verbatim}
 
 \section{Conclusions}
 
-    Hello, world!
-
-    Instead of WYSIWYG editors, typesetting systems like \TeX{} or \LaTeX{} \cite{lamport94} can be used.
-
+On this paper we have constructed a general way for publishing arbitrary data to the Cardano blockchain in the form of DataScripts, and a way for extracting back our original data from the DataScripts. With this mechanism available, lots of communication systems using Cardano and Plutus Smart Contracts are viable.
 
 \begin{thebibliography}{9}
 
