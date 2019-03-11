@@ -1,4 +1,5 @@
 \documentclass{article}
+\usepackage{url}
 \begin{document}
 \title{A pub-sub mechanism for Cardano and Plutus}
 \author{Javier Casas Velasco}
@@ -10,6 +11,8 @@
 \end{abstract}
 
 \tableofcontents
+
+\pagebreak
 
 \section{Introduction}
 Blockchains provide a new way to intercommunicate different actors in the world. The blockchains provide a solution for the old problem of getting to cooperate different actors that may not want to cooperate. In this sense, the main use of the Blockchain has been so far as a ledger that is mostly handled manually. When two actors want to communicate, they use mostly manual approaches (such as chats, videoconferences, or plain old phone calls) before actually using the Blockchain, in most cases as a ledger for paying.
@@ -40,12 +43,12 @@ The pub-sub pattern uses broadcasting as the single way of communication. A copy
 The main difference between pub-sub and other many-to-many communication patterns is that pub-sub delivers all the messages to all the subscribers, whereas other patterns may decide to route the messages to a restricted group of receivers based on an arbitrary policy.
 
 \subsection{The Cardano blockchain}
-Cardano is a blockchain based on the Outboros Proof of Stake {QUOTE HERE}. It provides a model for universal transactions called UTxO. The Outboros Proof of Stake protocol provides protection against many of the usual attacks against blockchains, while being a Proof of Stake protocol, and thus requiring very little computational power in comparison with Proof of Work blockchains. On top of the usual cryptocurrency operations, Cardano seeks to provide other services, including Smart Contracts.
+Cardano is a blockchain based on the Outboros Proof of Stake\cite{outboros}. It provides a model for universal transactions called UTxO. The Outboros Proof of Stake protocol provides protection against many of the usual attacks against blockchains, while being a Proof of Stake protocol, and thus requiring very little computational power in comparison with Proof of Work blockchains. On top of the usual cryptocurrency operations, Cardano seeks to provide other services, including Smart Contracts.
 
 \subsection{Plutus Smart Contracts in the Cardano blockchain}
 A Smart Contract is a transaction in a blockchain governed by an arbitrary program. This is different from the usual transactions, that are usually governed solely by one or several cryptographic signature.
 
-The Smart Contracts for the Cardano blockchain will be written in a language called Plutus, and based on Haskell. At the time of writing this paper, Plutus is in heavy evolution, and lacks yet a testing network. The only way to execute Plutus smart contracts is through the Plutus Emulator, or through the Plutus Playground, which uses the emulator under the hood.
+The Smart Contracts for the Cardano blockchain will be written in a language called Plutus, and based on Haskell. At the time of writing this paper, Plutus is in heavy evolution, and lacks yet a testing network. The only way to execute Plutus smart contracts is through the Plutus Emulator\cite{plutus-emulator}, or through the Plutus Playground\cite{plutus-playground}, which uses the emulator under the hood.
 
 The way Plutus Smart Contracts are implemented is quite simple, but requires some understanding:
 
@@ -65,41 +68,45 @@ First, we need to publish messages to the blockchain. For this, we will use smar
 
 For this, we can use the standard mechanisms that Plutus provides:
 
-\begin{description}
-\item [Ledger.Types.lifted] converts a bunch of data to Plutus format.
-\item [Wallet.API.payToScript] pays an amount of Ada to the address of a Smart contract with the DataScript provided.
-\end{description}
+\begin{itemize}
+\item \verb|Ledger.Types.lifted| converts a bunch of data to Plutus format.
+\item \verb|Wallet.API.payToScript| pays an amount of Ada to the address of a Smart contract with the DataScript provided.
+\end{itemize}
 
-A usual implementation of this can be:
-
+A usual implementation looks like this:
+\nopagebreak
 \begin{verbatim}
-CODE GOES HERE
+payToContract :: (WalletAPI m, WalletDiagnostics m) => Value -> m ()
+payToContract val = payToScript_ defaultSlotRange contractAddress val ds
+  where
+    ds = DataScript (Ledger.lifted contractData)
+    contractData = ...
 \end{verbatim}
 
 \subsection{Receiving messages from the blockchain}
 Receiving messages is also supported by the blockchain, but not in the way the Cardano team envisioned.
 
 The Wallet API supports a wallet listening for activity in arbitrary addresses. This is intended for the wallet to be notified when it receives a transaction, or when activity occurs at a smart contract of interest. This mechanism is based on two Wallet API endpoints:
+\nopagebreak
+\begin{itemize}
+\item \verb|Wallet.API.startWatching| starts watching the specified address, and adds any transactions that happen on it to the dictionary of watched addresses.
+\item \verb|Wallet.API.watchedAddresses| returns the dictionary of watched addresses, that includes all the associated transactions for all the watched addresses, including DataScripts for associated payToScript transactions.
+\end{itemize}
 
-\begin{description}
-\item [Wallet.API.startWatching] starts watching the specified address, and adds any transactions that happen on it to the dictionary of watched addresses.
-\item [Wallet.API.watchedAddresses] returns the dictionary of watched addresses, that includes all the associated transactions for all the watched addresses, including DataScripts for associated payToScript transactions.
-\end{description}
-
-This means we can recover data from the blockchain, but in the format of Plutus smart contracts. The messages will be accumulated on the AddressMap in arbitrary order, and this is something we have to keep in mind when constructing our systems.
+This means we can recover data from the blockchain, but in the format of Plutus smart contracts. The messages will be accumulated on the \verb|AddressMap|\cite{address-map} in arbitrary order, and this is something we have to keep in mind when constructing our systems.
 
 \section{Converting arbitrary data from and to DataScripts}
 The blockchain will accept and return data in the Plutus format, but we want to process it as Haskell data, so our standard Haskell applications can just use it.
 
 \subsection{Converting arbitrary data into DataScripts}
 Converting arbitrary data to a DataScript is well supported in the system. As stated previously,
+\nopagebreak
+\begin{itemize}
+\item \verb|Ledger.Types.lifted| converts a bunch of data to Plutus format.
+\end{itemize}
 
-\begin{description}
-\item [Ledger.Types.lifted] converts a bunch of data to Plutus format.
-\end{description}
-
-The only requirement is that the data has a Language.PlutusTx.Lift.Class.Lift instance, which can be manufactured automatically by using the Language.PlutusTx.makeLift Template Haskell incantation.
-
+The only requirement is that the data has a \verb|Language.PlutusTx.Lift.Class.Lift| instance, which can be manufactured automatically by using the \verb|Language.PlutusTx.makeLift| Template Haskell incantation.
+\nopagebreak
 \begin{verbatim}
 module MyModule where
 
@@ -119,12 +126,13 @@ PlutusTx.makeLift ''MyDatatype
 \end{verbatim}
 
 \subsection{Recovering arbitrary data from DataScripts}
-Lifting data to the Plutus format is as easy as using the Ledger.Types.lifted function. But the way back is not that easy. To be able to achieve this, we have to figure out the Plutus format, and a way to interpret Haskell datatypes out of it.
+Lifting data to the Plutus format is as easy as using the \verb|Ledger.Types.lifted| function. But the way back is not that easy. To be able to achieve this, we have to figure out the Plutus format, and a way to interpret Haskell datatypes out of it.
 
 So let's start with an in-depth overview of Plutus.
 
 \subsubsection{Core Plutus types}
-From the Plutus core types, at https://github.com/input-output-hk/plutus/blob/master/language-plutus-core/src/Language/PlutusCore/Type.hs\#L235, let's get to understand the four builtin types:
+From the Plutus core types\cite{plutus-core-constant}, let's get to understand the four builtin types:
+\nopagebreak
 \begin{verbatim}
 -- | A constant value.
 data Constant a = BuiltinInt a Natural Integer
@@ -134,11 +142,10 @@ data Constant a = BuiltinInt a Natural Integer
         deriving (Functor, Show, Eq, Generic, NFData, Lift)
 \end{verbatim}
 
-There are four builtin types: Integer, ByteString, Natural and String.
+There are four builtin types: \verb|Integer|, \verb|ByteString|, \verb|Natural| and \verb|String|.
 
-\pagebreak
-
-Just after the previous code, at https://github.com/input-output-hk/plutus/blob/master/language-plutus-core/src/Language/PlutusCore/Type.hs\#L244, we can see the different terms that can be part of a term:
+Just after the previous code\cite{plutus-core-term}, we can see the different values that can be part of a term:
+\nopagebreak
 \begin{verbatim}
 data Term tyname name a = Var a (name a) -- ^ A named variable
                         | TyAbs a (tyname a) (Kind a) (Term tyname name a)
@@ -154,6 +161,7 @@ deriving (Functor, Show, Generic, NFData, Lift)
 \end{verbatim}
 
 Following from these two pieces of code, we can get the final form of a builtin value in Plutus:
+\nopagebreak
 \begin{itemize}
 \item \verb|Constant _ (BuiltinInt _ _ i)|
 \item \verb|Constant _ (BuiltinBS _ _ bs)|
@@ -171,7 +179,7 @@ Plutus is based on Lambda Calculus. It looks and behaves in a way similar to Has
 \subsubsection{Evaluating Plutus programs}
 We know how the programs will look like after they have been fully evaluated, but we haven't defined how evaluation will happen. As expected, Plutus provides a way to evaluate programs that is intended mainly to be used on the emulator to see if a program errors out or not, but we will use this mechanism in a different way.
 
-The main function is located in Language.PlutusTx.Evaluation.evaluateCekTrace
+The main function is located at \verb|Language.PlutusTx.Evaluation.evaluateCekTrace|.
 
 \begin{verbatim}
 evaluateCekTrace
@@ -179,7 +187,8 @@ evaluateCekTrace
     -> ([String], EvaluationResultDef)
 \end{verbatim}
 
-When running a Plutus program through this evaluator function, it will generate a result and a bunch of error messages. We are interested in the EvaluationResultDef:
+When running a Plutus program through this evaluator function, it will generate a result and a bunch of error messages. We are interested in the \verb|EvaluationResultDef|:
+\nopagebreak
 
 \begin{verbatim}
 type EvaluationResultDef = EvaluationResult (Value TyName Name ())
@@ -189,7 +198,8 @@ data EvaluationResult a
     deriving (Show, Eq, Functor, Foldable, Traversable)
 \end{verbatim}
 
-Now it is obvious how we can distinguish a success from a failure, but what is that (Value TyName Name ()) ? A bit of looking around finally completes almost the whole piece of the puzzle:
+Now it is obvious how we can distinguish a success from a failure, but what is that \verb|(Value TyName Name ())| ? A bit of looking around finally completes almost the whole piece of the puzzle:
+\nopagebreak
 
 \begin{verbatim}
 newtype Script = Script { getPlc :: PLC.Program PLC.TyName PLC.Name () }
@@ -198,12 +208,13 @@ newtype DataScript = DataScript { getDataScript :: Script }
 newtype RedeemerScript = RedeemerScript { getRedeemer :: Script }
 \end{verbatim}
 
-The Validators, the Data Scripts, and the Redeemer Scripts are nothing more than Scripts, which are nothing more than Program TyName Name (), that when evaluated, produce an EvaluationResult that may contain a Value TyName Name (). Finally, we pattern match on the Value TyName Name (), and extract the corresponding constructor of Constant.
+The Validators, the Data Scripts, and the Redeemer Scripts are nothing more than Scripts, which are nothing more than \verb|Program TyName Name ()|, that when evaluated, produce an \verb|EvaluationResult| that may contain a \verb|Value TyName Name ()|. Finally, we pattern match on the \verb|Value TyName Name ()|, and extract the corresponding constructor of \verb|Constant|.
 
 \subsubsection{Extracting fields from complex datatypes}
 The previous schema allows us to extract Plutus core datatypes, as long as they are standalone. But, what if the value is part of a composite datatype? After all, we all happily use ADTs in Plutus, and would be a bad surprise if we can't extract values from them.
 
 The answer lies again in Lambda Calculus in the Haskell style. Let's have a small example:
+\nopagebreak
 \begin{verbatim}
 data Foo = Foo
           { fooBar :: Int
@@ -215,6 +226,7 @@ data Foo = Foo
 PlutusTx.makeLift ''Future
 \end{verbatim}
 If we could extract any of the fields, we could use our evaluation mechanism to figure out what is the actual value by pattern matching on the result. In Haskell we would happily do it by using the accessor functions fooBar, fooBaz and barBar. These functions will not work in Plutus, and, helpfully, Plutus suggests us to use pattern matching. Let's construct a few Plutus functions to extract the values:
+\nopagebreak
 \begin{verbatim}
 fooBarAccessor = $$(Ledger.compileScript [|| \(Foo fooBar _) -> fooBar ||]) 
 fooBazAccessor = $$(Ledger.compileScript [|| \(Foo _ fooBaz) -> fooBaz ||]) 
@@ -222,22 +234,31 @@ barBarAccessor = $$(Ledger.compileScript [|| \(Bar barBar) -> barBar ||])
 \end{verbatim}
 
 Now, by using plain old Lambda calculus, we should just be able to apply an accessor to a value of Foo and get either one of the fields out, or an error. To do this, we need another function provided by Plutus:
+\nopagebreak
 
 \begin{verbatim}
 applyScript :: Script -> Script -> Script
 \end{verbatim}
 
-Essentially, applyScript takes an f and an a, and returns f a. Which then we run through evaluateCekTrace to get a value or an error out. And now we are almost ready to complete the way back to Haskell from Plutus. We start with a bunch of functions for extracting the core values:
+Essentially, applyScript takes an \verb|f| and an \verb|a|, and returns \verb|f a|. Which then we run through \verb|evaluateCekTrace| to get a value or an error out. And now we are almost ready to complete the way back to Haskell from Plutus. We start with a bunch of functions for extracting the core values:
+\nopagebreak
 
 \begin{verbatim}
 getInt :: (a, EvaluationResult (Term b c d)) -> Maybe Integer
 getInt (_, EvaluationSuccess (Constant _ (BuiltinInt _ _ x))) = Just x
 getInt _ = Nothing
+
+getBS :: (a, EvaluationResult (Term b c d)) -> Maybe ByteString
+getBS = ...
+
+getString :: (a, EvaluationResult (Term b c d)) -> Maybe String
+getString = ...
 \end{verbatim}
 
-These functions can't just return the datatype, instead they have to offer it as a Maybe. After all, nothing stops us from trying to extract values from datatypes that don't have such values, and the only way to allow that to work properly is by offering some kind of signalling for failure, for example, Maybe.
+These functions can't just return the datatype, instead they have to offer it as a \verb|Maybe|. After all, nothing stops us from trying to extract values from datatypes that don't have such values, and the only way to allow that to work properly is by offering some kind of signalling for failure, for example, \verb|Maybe|.
 
-And we continue with functions for extracting specific fields in our Foo datastructure:
+And we continue with functions for extracting specific fields in our \verb|Foo| datastructure:
+\nopagebreak
 \begin{verbatim}
 getFooBar ::
   DataScript ->
@@ -254,7 +275,8 @@ getBarBar :: DataScript -> Maybe Int
 getBarBar = ...
 \end{verbatim}
 
-Finally, we take all the getters and make use of old Applicative/Alternative machinery to construct our Foo back:
+Finally, we take all the getters and make use of old Applicative/Alternative machinery to construct our \verb|Foo| back:
+\nopagebreak
 
 \begin{verbatim}
 getFoo ::
@@ -267,9 +289,10 @@ getFoo datascript =
 \end{verbatim}
 
 \section{The plutus-unlift library}
-All the code to extract a value from a DataScript is quite mechanical, and can be streamlined. For this, we have constructed a small library, called plutus-unlift, that is intended to simplify this process.
+All the code to extract a value from a DataScript is quite mechanical, and can be streamlined. For this, we have constructed a small library, called \verb|plutus-unlift|, that is intended to simplify this process.
 
-With the intention of supporting extracting arbitrarily nested datastructures, we define a typeclass, called Unlift, to simplify the process:
+With the intention of supporting extracting arbitrarily nested datastructures, we define a typeclass, called \verb|Unlift|, to simplify the process:
+\nopagebreak
 
 \begin{verbatim}
 class Unlift a where
@@ -277,6 +300,7 @@ class Unlift a where
 \end{verbatim}
 
 And we support this typeclass with some instances for basic cases:
+\nopagebreak
 
 \begin{verbatim}
 instance Unlift ByteString where
@@ -290,6 +314,7 @@ instance Unlift Int where
 \end{verbatim}
 
 Newtype instances are not hard to construct:
+\nopagebreak
 
 \begin{verbatim}
 instance Unlift PubKey where
@@ -298,9 +323,8 @@ instance Unlift PubKey where
       extractor = $$(Ledger.compileScript [|| \(PubKey x) -> x ||])
 \end{verbatim}
 
-\pagebreak
-
 And, finally, instances for arbitrary datatypes are also not hard to construct:
+\nopagebreak
 
 \begin{verbatim}
 instance Unlift Foo where
@@ -321,12 +345,34 @@ On this paper we have constructed a general way for publishing arbitrary data to
 
 \begin{thebibliography}{9}
 
-\bibitem{lamport94}
-  Leslie Lamport,
-    \textit{\LaTeX: a document preparation system},
-    Addison Wesley, Massachusetts,
-    2nd edition,
-    1994.
+%\bibitem{lamport94}
+%  Leslie Lamport,
+%    \textit{\LaTeX: a document preparation system},
+%    Addison Wesley, Massachusetts,
+%    2nd edition,
+%    1994.
+
+%\bibitem{bl}Business Logic layer, \url{http://en.wikipedia.org/wiki/Business_logic_layer}, 23 12 2011.
+
+\bibitem{plutus-core-constant}
+  Plutus Core Constant datatype,
+    \url{https://github.com/input-output-hk/plutus/blob/master/language-plutus-core/src/Language/PlutusCore/Type.hs#L235}, 
+
+\bibitem{plutus-core-term}
+  Plutus Core Term datatype,
+    \url{ https://github.com/input-output-hk/plutus/blob/master/language-plutus-core/src/Language/PlutusCore/Type.hs#L244}, 
+
+\bibitem{address-map}
+  Wallet API Address Map, \url{https://github.com/input-output-hk/plutus/blob/master/wallet-api/src/Wallet/Emulator/AddressMap.hs#L39}
+
+\bibitem{outboros}
+  Outboros Proof of Stake, \url{https://cardanodocs.com/cardano/proof-of-stake/}
+
+\bibitem{plutus-playground}
+  Plutus Playground, \url{https://prod.playground.plutus.iohkdev.io/}
+
+\bibitem{plutus-emulator}
+  Plutus Emulator, \url{https://github.com/input-output-hk/plutus/tree/master/wallet-api/src/Wallet/Emulator}
 
 \end{thebibliography}
 
