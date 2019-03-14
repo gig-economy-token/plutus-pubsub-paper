@@ -7,7 +7,7 @@
 \maketitle
 
 \begin{abstract}
-  On this paper we demonstrate how we can use DataScripts to communicate different programs using the Cardano Blockchain and the Plutus Smart Contract programming language. We construct a mechanism that works in a way akin to a pub-sub communication system.
+  On this paper we demonstrate how we can use DataScripts to communicate different programs using the Cardano Blockchain and the Plutus Smart Contract programming language. We construct a mechanism that works in a way akin to a pub-sub communication system. This mechanism has been developed during the development of the GiG Economy Token\cite{gig-token}.
 \end{abstract}
 
 \tableofcontents
@@ -15,9 +15,9 @@
 \pagebreak
 
 \section{Introduction}
-Blockchains provide a new way to intercommunicate different actors in the world. The blockchains provide a solution for the old problem of getting to cooperate different actors that may not want to cooperate. In this sense, the main use of the Blockchain has been so far as a ledger that is mostly handled manually. When two actors want to communicate, they use mostly manual approaches (such as chats, videoconferences, or plain old phone calls) before actually using the Blockchain, in most cases as a ledger for paying.
+Blockchains provide a new way to intercommunicate different actors in the world. The blockchains provide a solution for the old problem of getting to cooperate different actors that may not want to cooperate. In this sense, the main use of the Blockchain has been so far as a ledger that is mostly handled manually. When two actors want to communicate, they use manual approaches (such as chats, videoconferences, or plain old phone calls) before actually using the Blockchain, in most cases as a ledger for payment.
 
-In order to be able to automate some of this manual communication, an automatic way of communicating these actors shall be developed, so that the actors can communicate without resorting to manual ways.
+In order to be able to automate some of this manual communication, an automatic way of communicating these actors shall be developed, so that the actors can communicate without resorting to manual ways. The GiG Economy Token\cite{gig-token} uses this mechanism to communicate freelancers and employers prior to actually dealing with the payment details.
 
 \subsection{The Publisher-Subscriber (pub-sub) pattern}
 
@@ -147,16 +147,17 @@ There are four builtin types: \verb|Integer|, \verb|ByteString|, \verb|Natural| 
 Just after the previous code\cite{plutus-core-term}, we can see the different values that can be part of a term:
 \nopagebreak
 \begin{verbatim}
-data Term tyname name a = Var a (name a) -- ^ A named variable
-                        | TyAbs a (tyname a) (Kind a) (Term tyname name a)
-                        | LamAbs a (name a) (Type tyname a) (Term tyname name a)
-                        | Apply a (Term tyname name a) (Term tyname name a)
-                        | Constant a (Constant a) -- ^ A constant term
-                        | Builtin a (Builtin a)
-                        | TyInst a (Term tyname name a) (Type tyname a)
-                        | Unwrap a (Term tyname name a)
-                        | IWrap a (Type tyname a) (Type tyname a) (Term tyname name a)
-                        | Error a (Type tyname a)
+data Term tyname name a
+  = Var a (name a) -- ^ A named variable
+  | TyAbs a (tyname a) (Kind a) (Term tyname name a)
+  | LamAbs a (name a) (Type tyname a) (Term tyname name a)
+  | Apply a (Term tyname name a) (Term tyname name a)
+  | Constant a (Constant a) -- ^ A constant term
+  | Builtin a (Builtin a)
+  | TyInst a (Term tyname name a) (Type tyname a)
+  | Unwrap a (Term tyname name a)
+  | IWrap a (Type tyname a) (Type tyname a) (Term tyname name a)
+  | Error a (Type tyname a)
 deriving (Functor, Show, Generic, NFData, Lift)
 \end{verbatim}
 
@@ -263,9 +264,9 @@ And we continue with functions for extracting specific fields in our \verb|Foo| 
 getFooBar ::
   DataScript ->
   Maybe Int
-getFooBar datascript =
-    getInt $ evaluateCekTrace (unsafeCoerce (accessor `applyScript` datascript)
+getFooBar datascript = getInt r
   where
+    r = evaluateCekTrace (unsafeCoerce (accessor `applyScript` datascript)
     accessor = fooBarAccessor
 
 getFooBaz :: DataScript -> Maybe ByteString
@@ -310,7 +311,9 @@ instance Unlift Integer where
   unlift (DataScript ds) = getInt $ evaluateCekTrace (unsafeCoerce ds)
 
 instance Unlift Int where
-  unlift (DataScript ds) = fromIntegral <$> (getInt $ evaluateCekTrace (unsafeCoerce ds))
+  unlift (DataScript ds) = fromIntegral <$> i
+    where
+      i = getInt $ evaluateCekTrace (unsafeCoerce ds)
 \end{verbatim}
 
 Newtype instances are not hard to construct:
@@ -318,8 +321,9 @@ Newtype instances are not hard to construct:
 
 \begin{verbatim}
 instance Unlift PubKey where
-  unlift (DataScript ds) = PubKey <$> unlift (DataScript (extractor `applyScript` ds))
+  unlift (DataScript ds) = PubKey <$> pk
     where
+      pk = unlift (DataScript (extractor `applyScript` ds))
       extractor = $$(Ledger.compileScript [|| \(PubKey x) -> x ||])
 \end{verbatim}
 
@@ -331,11 +335,14 @@ instance Unlift Foo where
   unlift (DataScript ds) =
     (
       Foo
-      <$> unlift (DataScript ($$(Ledger.compileScript [|| \(Foo a _) -> a ||]) `applyScript` ds))
-      <*> unlift (DataScript ($$(Ledger.compileScript [|| \(Foo _ b) -> b ||]) `applyScript` ds))
+      <$> unlift (DataScript
+          ($$(Ledger.compileScript [|| \(Foo a _) -> a ||]) `applyScript` ds))
+      <*> unlift (DataScript
+          ($$(Ledger.compileScript [|| \(Foo _ b) -> b ||]) `applyScript` ds))
     ) <|> (
       Bar
-      <$> unlift (DataScript ($$(Ledger.compileScript [|| \(Bar a) -> a ||]) `applyScript` ds))
+      <$> unlift (DataScript
+          ($$(Ledger.compileScript [|| \(Bar a) -> a ||]) `applyScript` ds))
     )
 \end{verbatim}
 
@@ -345,34 +352,33 @@ On this paper we have constructed a general way for publishing arbitrary data to
 
 \begin{thebibliography}{9}
 
-%\bibitem{lamport94}
-%  Leslie Lamport,
-%    \textit{\LaTeX: a document preparation system},
-%    Addison Wesley, Massachusetts,
-%    2nd edition,
-%    1994.
-
-%\bibitem{bl}Business Logic layer, \url{http://en.wikipedia.org/wiki/Business_logic_layer}, 23 12 2011.
-
-\bibitem{plutus-core-constant}
-  Plutus Core Constant datatype,
-    \url{https://github.com/input-output-hk/plutus/blob/master/language-plutus-core/src/Language/PlutusCore/Type.hs#L235}, 
-
-\bibitem{plutus-core-term}
-  Plutus Core Term datatype,
-    \url{ https://github.com/input-output-hk/plutus/blob/master/language-plutus-core/src/Language/PlutusCore/Type.hs#L244}, 
-
-\bibitem{address-map}
-  Wallet API Address Map, \url{https://github.com/input-output-hk/plutus/blob/master/wallet-api/src/Wallet/Emulator/AddressMap.hs#L39}
+\bibitem{gig-token}
+  GiG Economy Token organization at GitHub, \newline
+    \url{https://github.com/gig-economy-token}.
 
 \bibitem{outboros}
-  Outboros Proof of Stake, \url{https://cardanodocs.com/cardano/proof-of-stake/}
-
-\bibitem{plutus-playground}
-  Plutus Playground, \url{https://prod.playground.plutus.iohkdev.io/}
+  Outboros Proof of Stake, \newline
+    \url{https://cardanodocs.com/cardano/proof-of-stake/}.
 
 \bibitem{plutus-emulator}
-  Plutus Emulator, \url{https://github.com/input-output-hk/plutus/tree/master/wallet-api/src/Wallet/Emulator}
+  Plutus Emulator, \newline
+    \url{https://github.com/input-output-hk/plutus/tree/master/wallet-api/src/Wallet/Emulator}.
+
+\bibitem{plutus-playground}
+  Plutus Playground, \newline
+    \url{https://prod.playground.plutus.iohkdev.io/}.
+
+\bibitem{plutus-core-constant}
+  Plutus Core Constant datatype, \newline
+    \url{https://github.com/input-output-hk/plutus/blob/a04c5681c695c85035958c79bae46130cdd9778e/language-plutus-core/src/Language/PlutusCore/Type.hs#L235}.
+
+\bibitem{plutus-core-term}
+  Plutus Core Term datatype, \newline
+    \url{https://github.com/input-output-hk/plutus/blob/a04c5681c695c85035958c79bae46130cdd9778e/language-plutus-core/src/Language/PlutusCore/Type.hs#L244}.
+
+\bibitem{address-map}
+  Wallet API Address Map, \newline
+    \url{https://github.com/input-output-hk/plutus/blob/a04c5681c695c85035958c79bae46130cdd9778e/wallet-api/src/Wallet/Emulator/AddressMap.hs#L39}.
 
 \end{thebibliography}
 
