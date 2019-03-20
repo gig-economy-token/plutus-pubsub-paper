@@ -84,8 +84,6 @@ payToContract val = payToScript_ defaultSlotRange contractAddress val ds
 \end{verbatim}
 
 \subsection{Receiving messages from the blockchain}
-Receiving messages is also supported by the blockchain, but not in the way the Cardano team envisioned.
-
 The Wallet API supports a wallet listening for activity in arbitrary addresses. This is intended for the wallet to be notified when it receives a transaction, or when activity occurs at a smart contract of interest. This mechanism is based on two Wallet API endpoints:
 \nopagebreak
 \begin{itemize}
@@ -96,7 +94,7 @@ The Wallet API supports a wallet listening for activity in arbitrary addresses. 
 This means we can recover data from the blockchain, but in the format of Plutus smart contracts. The messages will be accumulated on the \verb|AddressMap|\cite{address-map} in arbitrary order, and this is something we have to keep in mind when constructing our systems.
 
 \section{Converting arbitrary data from and to DataScripts}
-The blockchain will accept and return data in the Plutus format, but we want to process it as Haskell data, so our standard Haskell applications can just use it.
+The blockchain will accept and return data in the Plutus format, but we want to process it as Haskell data, so our standard Haskell applications can use it.
 
 \subsection{Converting arbitrary data into DataScripts}
 Converting arbitrary data to a DataScript is well supported in the system. As stated previously,
