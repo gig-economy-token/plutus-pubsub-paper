@@ -1,9 +1,3 @@
 # Plutus Publisher-Subscriber whitepaper
 
-On this paper we demonstrate how we can use DataScripts to communicate different programs using the Cardano Blockchain and the Plutus Smart Contract programming language. We construct a mechanism that works in a way akin to a pub-sub communication system.
-
-This mechanism has been developed during the development of the GiG Economy Token.
-
-The library `plutus-unlift` is located at [https://github.com/javcasas/plutus-unlift](https://github.com/javcasas/plutus-unlift)
-
-&copy; 2019 - The GiG Economy Token team
+This content has been removed as part of a legal takedown initiated by my previous employer, who shall not be named. Therefore, I am transferring it to the client - the GiG Economy Organization (who doesn't have any guilt on what's happening here), and its new location shall be [https://github.com/gig-economy-token/plutus-pubsub-paper](https://github.com/gig-economy-token/plutus-pubsub-paper).
