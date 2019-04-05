@@ -6,4 +6,4 @@ This mechanism has been developed during the development of the GiG Economy Toke
 
 The library `plutus-unlift` is located at [https://github.com/javcasas/plutus-unlift](https://github.com/javcasas/plutus-unlift)
 
-&copy; 2019 - Javier Casas Velasco and the GiG Economy Token team
+&copy; 2019 - The GiG Economy Token team
